@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-title" content="店頭照合">
+<meta name="theme-color" content="#0f6b5c">
+<title>店頭リスト照合</title>
+<style>
+/* Layout: one narrow column — search bar pinned on top, result cards below, list status at the foot */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#17201d; --muted:#5d6a65; --line:#d7dedb;
+  --accent:#0f6b5c; --accent-fg:#ffffff;
+  --bd:#b5481f; --bd-soft:#fbeae2;      /* バースデイ */
+  --js:#1d4fa3; --js-soft:#e6edf9;      /* ジョーシン */
+  --warn:#8a5a00; --warn-soft:#fdf1d8;
+  --font-body:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --font-code:ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#111816; --surface:#1a2320; --fg:#e6eeeb; --muted:#9aaba5; --line:#2c3935;
+  --accent:#4fbfa8; --accent-fg:#06201b;
+  --bd:#f08a5d; --bd-soft:#3a2219; --js:#7fa6ee; --js-soft:#1b2640;
+  --warn:#f0c060; --warn-soft:#3a2f14; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:0 32px}
+header{position:sticky;top:0;z-index:2;background:var(--bg);padding-block:14px 12px;border-bottom:1px solid var(--line)}
+h1{font-size:15px;margin:0 0 10px;letter-spacing:.04em;color:var(--muted);font-weight:600}
+form{display:flex;gap:8px}
+input#q{flex:1;min-width:0;font:600 18px/1.2 var(--font-code);letter-spacing:.04em;padding:12px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg)}
+input#q:focus{outline:none;border-color:var(--accent)}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 14px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:700;padding-inline:18px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+button.scanbtn{width:100%;margin-top:8px;padding:12px 14px;font-weight:700;color:var(--accent);border-color:var(--accent);text-align:center}
+button.scanbtn svg{width:20px;height:20px;vertical-align:-4px;margin-right:6px}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+#results{display:grid;gap:12px;margin-top:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 14px 12px;display:grid;gap:8px;min-width:0}
+.tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:6px}
+.tag.bd{background:var(--bd-soft);color:var(--bd)}
+.tag.js{background:var(--js-soft);color:var(--js)}
+.card.bd{border-left:4px solid var(--bd)}
+.card.js{border-left:4px solid var(--js)}
+.name{font-weight:700;font-size:15px;overflow-wrap:anywhere}
+.stock{font-size:22px;font-weight:800;color:var(--js);letter-spacing:.02em}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+dt{color:var(--muted);font-size:13px}
+dd{margin:0;font-variant-numeric:tabular-nums;font-weight:600;overflow-wrap:anywhere}
+dd.big{font-size:20px}
+.code{font-family:var(--font-code);letter-spacing:.03em}
+.sub{font-size:12px;color:var(--muted);font-weight:400}
+.links{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px}
+.links a{color:var(--accent)}
+.chip-warn{display:inline-block;font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-soft);padding:2px 8px;border-radius:6px}
+.none{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:20px 14px;text-align:center;font-weight:700;font-size:17px}
+.none .sub{display:block;margin-top:4px}
+.msg{border-radius:10px;padding:10px 12px;font-size:13px;background:var(--warn-soft);color:var(--warn)}
+footer{margin-top:24px;display:grid;gap:8px;font-size:12px;color:var(--muted)}
+.src{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.src b{color:var(--fg);font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* camera scanner sheet */
+#scan{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+#scan .view{position:relative;width:100%;max-width:520px;aspect-ratio:3/4;max-height:64vh;border-radius:14px;overflow:hidden;background:#000}
+#scan video{width:100%;height:100%;object-fit:cover;display:block}
+#scan .guide{position:absolute;left:8%;right:8%;top:36%;height:28%;border:2px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25);pointer-events:none}
+#scan .guide::after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff5a4f;opacity:.85}
+#scanMsg{color:#fff;font-size:14px;text-align:center;max-width:520px;min-height:1.5em}
+#scan .row{justify-content:center}
+#scan button{background:#fff;color:#111;border-color:#fff}
+#scan button.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.6)}
+@media (prefers-reduced-motion:no-preference){.card{animation:in .18s ease-out}@keyframes in{from{transform:translateY(4px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>店頭リスト照合 ─ バースデイ / ジョーシン在庫限り</h1>
+    <form id="f" autocomplete="off">
+      <input id="q" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ASIN または JAN" aria-label="ASIN または JAN">
+      <button class="primary" id="go" type="submit">照合</button>
+      <button id="clear" type="button">クリア</button>
+    </form>
+    <button id="scanOpen" class="scanbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>カメラでバーコードを読む</button>
+    <input id="scanFile" type="file" accept="image/*" capture="environment" hidden>
+    <div class="hint">例：B0H2XHBBJM ／ 4904810079125（13桁・12桁・8桁のJAN）</div>
+  </header>
+
+  <div id="results" aria-live="polite">
+    <div class="card"><div class="sub">リストを読み込むと、ここに照合結果が出ます。バースデイのリストにあれば管理番号と価格、ジョーシンのリストにあれば「在庫限り」と表示します。</div></div>
+  </div>
+
+  <footer>
+    <div id="srcBd" class="src"><span><b>バースデイ</b> 読み込み待ち</span><span></span></div>
+    <div id="srcJs" class="src"><span><b>ジョーシン在庫限り</b> 読み込み待ち</span><span></span></div>
+    <div id="status"></div>
+    <div class="row">
+      <button id="reload" type="button">リストを読み直す</button>
+      <button id="signout" type="button" hidden>ログアウト</button>
+    </div>
+    <div class="sub">リストは Google Drive からこの端末に直接読み込みます。読み込んだリストはこの端末にだけ保存されます。</div>
+  </footer>
+</div>
+
+<div id="scan" hidden role="dialog" aria-modal="true" aria-label="バーコード読み取り">
+  <div class="view"><video id="scanVideo" playsinline muted autoplay></video><div class="guide"></div></div>
+  <div id="scanMsg">バーコードを枠の中に合わせてください</div>
+  <div class="row">
+    <button id="scanClose" type="button">閉じる</button>
+    <button id="scanPhoto" type="button" class="ghost">写真を撮って読む</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+(function(){
+  // ---- settings --------------------------------------------------------
+  var CLIENT_ID = "902256410983-tmskg186f7kid7jedhpueumn631lb9lu.apps.googleusercontent.com";
+  var SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+  var LISTS = {
+    bd: { id: "1mrLOYm9eRGqE2v2DV5v1YeSn7UA2KkFG", label: "バースデイ" },
+    js: { id: "1kwCjJb77vykyt06tm-K846sKET8UYxX6", label: "ジョーシン在庫限り" }
+  };
+  var CACHE_KEY = "storecheck.v1";
+  var TOKEN_KEY = "storecheck.token";
+  var state = { bd: null, js: null, loadedAt: {}, fromCache: {} };
+
+  var $ = function(id){ return document.getElementById(id); };
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k, v){ try{ if(v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
+
+  function store(){ lsSet(CACHE_KEY, JSON.stringify({bd:state.bd, js:state.js, loadedAt:state.loadedAt})); }
+  function restore(){
+    try{
+      var raw = lsGet(CACHE_KEY); if(!raw) return;
+      var c = JSON.parse(raw);
+      ["bd","js"].forEach(function(k){ if(c[k]){ state[k]=c[k]; state.loadedAt[k]=c.loadedAt && c.loadedAt[k]; state.fromCache[k]=true; } });
+    }catch(e){}
+  }
+
+  // ---- normalize -------------------------------------------------------
+  function normAsin(v){ v = String(v==null?"":v).trim().toUpperCase(); return /^[A-Z0-9]{10}$/.test(v) ? v : ""; }
+  function normJan(v){
+    if(v==null || v==="") return "";
+    var s = typeof v === "number" ? String(Math.round(v)) : String(v).replace(/[^0-9]/g,"");
+    s = s.replace(/^0+/,"");
+    return s.length >= 7 ? s : "";
+  }
+  function parseQuery(q){
+    var t = String(q||"").replace(/[\s\-]/g,"").replace(/[Ａ-Ｚａ-ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}).toUpperCase();
+    if(/^[0-9]{8,14}$/.test(t)) return { jan: normJan(t), raw: t };
+    if(/^[A-Z0-9]{10}$/.test(t)) return { asin: t, raw: t };
+    return { raw: t };
+  }
+  function excelDate(v){
+    if(typeof v === "number" && v > 20000 && v < 80000){
+      var d = new Date(Math.round((v - 25569) * 864e5));
+      return d.getUTCFullYear()+"/"+(d.getUTCMonth()+1)+"/"+d.getUTCDate();
+    }
+    return v ? String(v) : "";
+  }
+  function yen(v){ return (typeof v === "number" && isFinite(v) && v > 0) ? "¥" + Math.round(v).toLocaleString("ja-JP") : ""; }
+
+  // ---- xlsx -> rows ----------------------------------------------------
+  function sheetRows(bytes){
+    var wb = XLSX.read(bytes, {type:"array"});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  }
+  // header row is the one whose column B reads "ASIN"
+  function dataRows(rows){
+    var h = rows.findIndex(function(r){ return r && String(r[1]||"").trim().toUpperCase() === "ASIN"; });
+    return rows.slice(h >= 0 ? h+1 : 2).filter(function(r){ return r && (normAsin(r[1]) || normJan(r[3])); });
+  }
+  function parseBd(rows){
+    // A No / B ASIN / C 商品名 / D JAN / E 管理番号 / F 店舗価格 / G 定価 / H 撮影日 / I 在庫なし / J New Cur
+    return dataRows(rows).map(function(r){ return {
+      no:r[0], asin:normAsin(r[1]), name:String(r[2]||"").trim(), jan:normJan(r[3]),
+      kanri:String(r[4]==null?"":r[4]).trim(), store:r[5], list:r[6], shot:excelDate(r[7]),
+      soldout:String(r[8]==null?"":r[8]).trim(), newp:r[9] }; });
+  }
+  function parseJs(rows){
+    // A No / B ASIN / C 商品名 / D JAN / E メーカー / ... / I 確認日
+    return dataRows(rows).map(function(r){ return {
+      no:r[0], asin:normAsin(r[1]), name:String(r[2]||"").trim(), jan:normJan(r[3]),
+      maker:String(r[4]||"").trim(), checked:excelDate(r[8]) }; });
+  }
+
+  // ---- Google sign-in (token only lives ~1h; kept in localStorage until it expires) ----
+  var tokenClient = null, pendingAuth = null;
+  function savedToken(){
+    try{ var t = JSON.parse(lsGet(TOKEN_KEY) || "null"); if(t && t.access_token && t.exp > Date.now() + 60000) return t.access_token; }catch(e){}
+    return null;
+  }
+  function gisReady(){ return window.google && google.accounts && google.accounts.oauth2; }
+  function initGis(){
+    if(tokenClient || !gisReady()) return !!tokenClient;
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      callback: function(resp){
+        var p = pendingAuth; pendingAuth = null;
+        if(resp && resp.access_token){
+          lsSet(TOKEN_KEY, JSON.stringify({access_token: resp.access_token, exp: Date.now() + (Number(resp.expires_in)||3600)*1000}));
+          if(p) p.resolve(resp.access_token);
+        }else if(p) p.reject({code:"auth", message:(resp && (resp.error_description || resp.error)) || "ログインできませんでした"});
+      },
+      error_callback: function(err){
+        var p = pendingAuth; pendingAuth = null;
+        if(p) p.reject({code: err && err.type === "popup_closed" ? "popup_closed" : "auth", message: err && err.type});
+      }
+    });
+    return true;
+  }
+  // must be called from a tap (Google opens a popup)
+  function signIn(){
+    return new Promise(function(resolve, reject){
+      if(!initGis()){ reject({code:"gis_missing"}); return; }
+      pendingAuth = {resolve:resolve, reject:reject};
+      tokenClient.requestAccessToken({prompt: lsGet("storecheck.signedOnce") ? "" : "consent"});
+    });
+  }
+
+  // ---- loading from Drive ----------------------------------------------
+  function errText(e){
+    if(!e) return "読み込みに失敗しました。";
+    if(e.code === "auth_needed") return "Google のログインが切れています。「リストを読み直す」を押してログインしてください。";
+    if(e.code === "popup_closed") return "ログイン画面が閉じられました。もう一度「リストを読み直す」を押してください。";
+    if(e.code === "gis_missing") return "Google のログイン部品を読み込めませんでした。電波の良い所でページを開き直してください。";
+    if(e.code === "auth") return "Google にログインできませんでした（" + (e.message||"") + "）。";
+    if(e.code === "http_404") return "Drive にファイルが見つかりません。ファイルが移動・削除されていないか確認してください。";
+    if(e.code === "http_403") return "このファイルを読む権限がありません。リストの持ち主の Google アカウントでログインしてください。";
+    if(e.code === "net") return "通信できませんでした。電波の良い所で「リストを読み直す」を押してください。";
+    return "読み込みに失敗しました（" + (e.code||"error") + "）。";
+  }
+  async function fetchList(key, token){
+    var info = LISTS[key];
+    setSrc(key, "読み込み中…", "");
+    var res;
+    try{
+      res = await fetch("https://www.googleapis.com/drive/v3/files/" + info.id + "?alt=media&supportsAllDrives=true", {headers:{Authorization:"Bearer " + token}});
+    }catch(e){ throw {code:"net"}; }
+    if(res.status === 401){ lsSet(TOKEN_KEY, null); throw {code:"auth_needed"}; }
+    if(!res.ok) throw {code:"http_" + res.status};
+    var rows = sheetRows(new Uint8Array(await res.arrayBuffer()));
+    state[key] = key === "bd" ? parseBd(rows) : parseJs(rows);
+    state.loadedAt[key] = Date.now();
+    state.fromCache[key] = false;
+  }
+  async function loadAll(interactive){
+    $("reload").disabled = true;
+    $("status").textContent = "";
+    try{
+      var token = savedToken();
+      if(!token){
+        if(!interactive){ showStatus({code:"auth_needed"}); return; }
+        token = await signIn();
+        lsSet("storecheck.signedOnce", "1");
+      }
+      var errs = await Promise.all(["bd","js"].map(function(k){
+        return fetchList(k, token).then(function(){ showSrc(k); return null; }, function(e){ showSrc(k, errText(e)); return e; });
+      }));
+      store();
+      var e = errs.filter(Boolean);
+      if(e.length) showStatus(e[0]);
+    }catch(e){
+      showStatus(e);
+    }finally{
+      $("reload").disabled = false;
+      $("signout").hidden = !savedToken();
+      if($("q").value.trim()) search();
+    }
+  }
+  function showStatus(e){
+    var s = $("status"); s.innerHTML = "";
+    var m = document.createElement("div"); m.className = "msg"; m.textContent = errText(e);
+    if(state.bd || state.js) m.textContent += "（今は端末に保存した前回のリストで照合します）";
+    s.appendChild(m);
+  }
+
+  function fmtTime(t){ if(!t) return ""; var d=new Date(t); return (d.getMonth()+1)+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+  function setSrc(key, left, right){
+    var el = key === "bd" ? $("srcBd") : $("srcJs");
+    el.children[0].innerHTML = ""; var b=document.createElement("b"); b.textContent=LISTS[key].label; el.children[0].appendChild(b); el.children[0].appendChild(document.createTextNode(" " + left));
+    el.children[1].textContent = right || "";
+  }
+  function showSrc(key, err){
+    var n = state[key] ? state[key].length : 0;
+    if(err){ setSrc(key, state[key] ? n + "件（前回読み込み分）" : "未読み込み", ""); return; }
+    setSrc(key, n + "件", (state.fromCache[key] ? "端末に保存した分 " : "読み込み ") + fmtTime(state.loadedAt[key]));
+  }
+
+  // ---- search & render -------------------------------------------------
+  function match(list, q){
+    if(!list) return [];
+    return list.filter(function(r){ return (q.asin && r.asin === q.asin) || (q.jan && r.jan === q.jan); });
+  }
+  function el(tag, cls, text){ var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+  function kv(dl, k, v, cls){ if(v==null || v==="") return; dl.appendChild(el("dt",null,k)); var d=el("dd",cls||null); if(v instanceof Node) d.appendChild(v); else d.textContent=v; dl.appendChild(d); }
+  function links(asin, jan){
+    var w = el("div","links");
+    if(asin){
+      var a=el("a",null,"Amazonで今の価格を見る"); a.href="https://www.amazon.co.jp/dp/"+asin; a.target="_blank"; a.rel="noopener"; w.appendChild(a);
+      var k=el("a",null,"Keepa"); k.href="https://keepa.com/#!product/5-"+asin; k.target="_blank"; k.rel="noopener"; w.appendChild(k);
+    } else if(jan){
+      var s=el("a",null,"AmazonでJAN検索"); s.href="https://www.amazon.co.jp/s?k="+jan; s.target="_blank"; s.rel="noopener"; w.appendChild(s);
+    }
+    return w;
+  }
+  function cardBd(r){
+    var c = el("div","card bd");
+    var top = el("div","row"); top.appendChild(el("span","tag bd","バースデイ"));
+    if(r.soldout && r.soldout !== "-") top.appendChild(el("span","chip-warn","在庫なし "+r.soldout));
+    c.appendChild(top);
+    c.appendChild(el("div","name", r.name || "（商品名なし）"));
+    var dl = el("dl");
+    kv(dl,"管理番号", r.kanri || "—", "big code");
+    var price = el("span"); price.textContent = yen(r.store) || "—";
+    if(yen(r.list)) { var s=el("span","sub"," 定価 "+yen(r.list)); price.appendChild(s); }
+    kv(dl,"バースデイ価格", price, "big");
+    var np = el("span"); np.textContent = yen(r.newp) || "記録なし";
+    np.appendChild(el("span","sub"," リスト記録値"));
+    kv(dl,"Amazon新品", np);
+    kv(dl,"撮影日", r.shot);
+    kv(dl,"ASIN / JAN", (r.asin||"—") + " / " + (r.jan||"—"), "code");
+    c.appendChild(dl);
+    c.appendChild(links(r.asin, r.jan));
+    return c;
+  }
+  function cardJs(r){
+    var c = el("div","card js");
+    c.appendChild(el("div",null)).appendChild(el("span","tag js","ジョーシン"));
+    c.appendChild(el("div","name", r.name || "（商品名なし）"));
+    c.appendChild(el("div","stock","在庫限り"));
+    var dl = el("dl");
+    kv(dl,"確認日", r.checked);
+    kv(dl,"ASIN / JAN", (r.asin||"—") + " / " + (r.jan||"—"), "code");
+    c.appendChild(dl);
+    c.appendChild(links(r.asin, r.jan));
+    return c;
+  }
+  function search(){
+    var q = parseQuery($("q").value);
+    var out = $("results"); out.innerHTML = "";
+    if(!q.raw){ return; }
+    if(!q.asin && !q.jan){
+      out.appendChild(el("div","msg","ASIN（英数字10桁）か JAN（数字8〜13桁）を入れてください。")); return;
+    }
+    if(!state.bd && !state.js){
+      out.appendChild(el("div","msg","リストがまだ読み込めていません。下の「リストを読み直す」を押してください。")); return;
+    }
+    var bd = match(state.bd, q), js = match(state.js, q);
+    bd.forEach(function(r){ out.appendChild(cardBd(r)); });
+    js.forEach(function(r){ out.appendChild(cardJs(r)); });
+    if(!bd.length && !js.length){
+      var n = el("div","none","該当商品なし");
+      n.appendChild(el("span","sub", (q.asin ? "ASIN " + q.asin : "JAN " + q.raw) + " はどちらのリストにもありません"));
+      out.appendChild(n);
+      out.appendChild(links(q.asin, q.jan));
+    }
+    var missing = [];
+    if(!state.bd) missing.push("バースデイ"); if(!state.js) missing.push("ジョーシン");
+    if(missing.length) out.appendChild(el("div","msg", missing.join("・") + " のリストは読み込めていないため、照合していません。"));
+  }
+
+  // ---- barcode scanning ------------------------------------------------
+  function zxingReady(){ return typeof ZXing !== "undefined" && ZXing.BrowserMultiFormatReader; }
+  function hintsMap(tryHarder){
+    // EAN-13 also reads UPC-A (as 0 + 12 digits). UPC-E/ITF/Code39 are left out: they produced false reads on blurry images.
+    var F = ZXing.BarcodeFormat, h = new Map();
+    h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.CODE_128]);
+    if(tryHarder) h.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    return h;
+  }
+  var reader = null, scanning = false, lastLive = "", watchdog = null;
+  function scanMsg(t){ $("scanMsg").textContent = t; }
+  function stopScan(){
+    scanning = false; lastLive = "";
+    if(watchdog){ clearInterval(watchdog); watchdog = null; }
+    try{ if(reader) reader.reset(); }catch(e){}
+    var v = $("scanVideo");
+    if(v.srcObject){ try{ v.srcObject.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} v.srcObject = null; }
+  }
+  function closeScan(){ stopScan(); $("scan").hidden = true; }
+  function applyCode(text){
+    $("q").value = String(text||"").trim();
+    search();
+    if(navigator.vibrate){ try{ navigator.vibrate(60); }catch(e){} }
+  }
+  function onLive(text){
+    if(!scanning) return;
+    // accept only when two consecutive reads agree, to avoid a one-off misread
+    if(text !== lastLive){ lastLive = text; return; }
+    closeScan();
+    applyCode(text);
+  }
+  async function openScan(){
+    if(!zxingReady()){ $("status").textContent = "バーコードを読む部品を読み込めませんでした。ページを開き直してください。"; return; }
+    $("scan").hidden = false;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ scanMsg("このブラウザではカメラ映像を使えません。「写真を撮って読む」を使ってください。"); return; }
+    if(!reader) reader = new ZXing.BrowserMultiFormatReader(hintsMap(false), 150);
+    scanMsg("カメラを起動しています…");
+    scanning = true;
+    var started = Date.now();
+    watchdog = setInterval(function(){
+      var v = $("scanVideo");
+      if(v.videoWidth > 0 && v.readyState >= 2){ clearInterval(watchdog); watchdog = null; scanMsg("バーコードを枠の中に合わせてください（近づけすぎるとピントが合いません）"); return; }
+      if(Date.now() - started > 8000){ stopScan(); scanMsg("カメラ映像を表示できませんでした。設定 → アプリ → Safari → カメラ で「許可」になっているか確認してください。"); }
+    }, 300);
+    try{
+      await reader.decodeFromConstraints(
+        { audio:false, video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1920 }, height:{ ideal:1080 } } },
+        $("scanVideo"),
+        function(result){ if(result) onLive(result.getText()); }
+      );
+    }catch(e){
+      if(!scanning) return;
+      stopScan();
+      var name = e && e.name;
+      scanMsg(name === "NotAllowedError" ? "カメラの使用が許可されませんでした。Safari のアドレスバー左の「ぁあ」→ Webサイトの設定 → カメラ を「許可」にしてから、もう一度押してください。"
+        : name === "NotFoundError" ? "カメラが見つかりませんでした。"
+        : "カメラを起動できませんでした（" + (name||"error") + "）。");
+    }
+  }
+  // Photo fallback (makes a shutter sound on Japanese iPhones; only for when live video fails)
+  function loadBitmap(file){
+    if(window.createImageBitmap) return createImageBitmap(file).catch(function(){ return loadImg(file); });
+    return loadImg(file);
+  }
+  function loadImg(file){
+    return new Promise(function(ok, ng){
+      var u = URL.createObjectURL(file), i = new Image();
+      i.onload = function(){ ok(i); }; i.onerror = function(){ URL.revokeObjectURL(u); ng(new Error("image")); };
+      i.src = u;
+    });
+  }
+  async function decodeImage(img){
+    var W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    var h = hintsMap(true), rd = new ZXing.MultiFormatReader(); rd.setHints(h);
+    var crops = [[0,.3,1,.4],[.15,.2,.7,.6],[0,0,1,1]], sizes = [1400, 2400];
+    var bins = [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer], deadline = Date.now() + 6000;
+    for(var si=0; si<sizes.length; si++) for(var ci=0; ci<crops.length; ci++) for(var rot=0; rot<2; rot++){
+      if(Date.now() > deadline) return null;
+      var c = crops[ci], sw = W*c[2], sh = H*c[3], k = Math.min(1, sizes[si] / Math.max(sw, sh));
+      if(si > 0 && k === 1 && sizes[si-1] >= Math.max(sw, sh)) continue;
+      var dw = Math.max(1, Math.round(sw*k)), dh = Math.max(1, Math.round(sh*k));
+      var cv = document.createElement("canvas"); cv.width = rot ? dh : dw; cv.height = rot ? dw : dh;
+      var g = cv.getContext("2d", {willReadFrequently:true});
+      if(rot){ g.translate(dh, 0); g.rotate(Math.PI/2); }
+      g.drawImage(img, W*c[0], H*c[1], sw, sh, 0, 0, dw, dh);
+      for(var b=0; b<bins.length; b++){
+        try{ return rd.decode(new ZXing.BinaryBitmap(new bins[b](new ZXing.HTMLCanvasElementLuminanceSource(cv))), h).getText(); }catch(e){}
+      }
+      cv.width = cv.height = 0;
+      await new Promise(function(r){ setTimeout(r, 0); });
+    }
+    return null;
+  }
+  async function decodePhoto(file){
+    if(!file || !zxingReady()) return;
+    $("scan").hidden = false;
+    scanMsg("写真から読み取っています…");
+    var img = null, code = null;
+    try{ img = await loadBitmap(file); code = await decodeImage(img); }catch(e){ code = null; }
+    finally{ if(img && img.close) try{ img.close(); }catch(e){} }
+    if(code){ closeScan(); applyCode(code); }
+    else scanMsg("写真からバーコードを読み取れませんでした。バーコードを真ん中に大きめに写して撮り直してください。");
+  }
+  $("scanOpen").addEventListener("click", openScan);
+  $("scanClose").addEventListener("click", closeScan);
+  $("scanPhoto").addEventListener("click", function(){ stopScan(); $("scanFile").value = ""; $("scanFile").click(); });
+  $("scanFile").addEventListener("change", function(){ decodePhoto(this.files && this.files[0]); });
+  document.addEventListener("keydown", function(ev){ if(ev.key === "Escape" && !$("scan").hidden) closeScan(); });
+  document.addEventListener("visibilitychange", function(){ if(document.hidden && scanning) closeScan(); });
+
+  $("f").addEventListener("submit", function(ev){ ev.preventDefault(); search(); $("q").select(); });
+  $("q").addEventListener("input", function(){ var q=parseQuery(this.value); if(q.asin || (q.jan && (q.raw.length===13 || q.raw.length===8 || q.raw.length===12))) search(); });
+  $("clear").addEventListener("click", function(){ var q=$("q"); q.value=""; $("results").innerHTML=""; q.focus(); });
+  $("reload").addEventListener("click", function(){ loadAll(true); });
+  $("signout").addEventListener("click", function(){
+    var t = savedToken();
+    if(t && gisReady()) try{ google.accounts.oauth2.revoke(t, function(){}); }catch(e){}
+    lsSet(TOKEN_KEY, null); lsSet("storecheck.signedOnce", null);
+    $("signout").hidden = true;
+    $("status").textContent = "ログアウトしました。端末に保存したリストはそのまま使えます。";
+  });
+
+  // ---- boot ------------------------------------------------------------
+  restore();
+  ["bd","js"].forEach(function(k){ if(state[k]) showSrc(k); });
+  if(typeof XLSX === "undefined") $("status").textContent = "表計算ファイルを読む部品を読み込めませんでした。ページを開き直してください。";
+  $("signout").hidden = !savedToken();
+  // Auto-load only while a saved token is still valid; otherwise wait for a tap (Google's login is a popup).
+  if(savedToken()) loadAll(false);
+  else if(!state.bd && !state.js) $("status").textContent = "はじめに「リストを読み直す」を押して、リストの持ち主の Google アカウントでログインしてください。";
+  else showStatus({code:"auth_needed"});
+  window.addEventListener("load", function(){ initGis(); });
+})();
+</script>
+</body>
+</html>
